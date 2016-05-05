@@ -2,9 +2,13 @@
 
 Spy marker is lightweight alternative for google analytics.
 
+## CDN
+
+`https://cdn.rawgit.com/co11ter/spy-marker/master/marker.js`
+
 ## Usage
 
-new marker(options);
+`new marker(options);`
 
 ## Options
 
