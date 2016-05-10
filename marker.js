@@ -60,6 +60,7 @@ if (!Object.assign) {
             stepSkip: 10, // save step (for example every 10th will save)
             timeout: 30 * 60 * 1000 // end script length (in mins)
         },
+        sendCounter: 0,
         data: {
             scrollY: [],
             scrollMove: 0,
@@ -116,19 +117,25 @@ if (!Object.assign) {
             var url = this.config.url +
                 '&data=' + base64_encode(JSON.stringify(this.data));
 
-            var img = document.createElement('img');
-            img.src = url;
-            img.style.display = "none";
-            document.body.appendChild(img);
-
-            /*var r = new XMLHttpRequest();
-             r.open("GET", url, true);
-             r.send();*/
+            // safari setting third party cookies by iframe
+            if(!this.sendCounter && navigator.userAgent.indexOf('Safari')!=-1 && navigator.userAgent.indexOf('Chrome')==-1) {
+                var iframe = document.createElement('iframe');
+                iframe.src = url+'&iframe=true';
+                iframe.style.display = "none";
+                document.body.appendChild(iframe);
+            } else {
+                var img = document.createElement('img');
+                img.src = url;
+                img.style.display = "none";
+                document.body.appendChild(img);
+            }
 
             this.data.scrollY = [];
             this.data.scrollMove = 0;
             this.data.mouseXY = [];
             this.data.mouseMove = 0;
+
+            this.sendCounter++;
 
             function base64_encode(data) {
                 var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
