@@ -1,6 +1,7 @@
 # spy-marker
 
 Spy marker is lightweight alternative for google analytics.
+Tested by [BrowserStack](https://www.browserstack.com).
 
 ## CDN
 
