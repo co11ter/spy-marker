@@ -205,11 +205,6 @@ if (!Object.assign) {
             this.data.scrollY.push(y);
 
             this.checkBufferSize();
-        },
-        setCustomData: function(fn) {
-            if(typeof fn!=='function')
-                throw new Error('customData is not function');
-            fn(this.data);
         }
     };
 })(window);
