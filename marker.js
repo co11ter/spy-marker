@@ -57,10 +57,10 @@ if (!Object.assign) {
         config: {
             sizeForSend: 50, // data pack size
             url: 'http://localhost/test?param=1', // url for send data
-            stepSkip: 10, // save step (for example every 10th will save)
-            timeout: 30 * 60 * 1000 // end script length (in mins)
+            stepSkip: 10, // save step for mouse move (for example every 10th will save)
+            timeout: 30 * 60 * 1000, // end listen time (in mins)
+            iframe: true
         },
-        sendCounter: 0,
         data: {
             scrollY: [],
             scrollMove: 0,
@@ -82,34 +82,40 @@ if (!Object.assign) {
                     }
                 };
 
-            addEvent('bufferOverflow', send, false);
-            addEvent('beforeunload', send, false);
-            addEvent('mouseout', out, false);
-            addEvent('mousemove', mouse, false);
-            addEvent('scroll', scroll, false);
+            addEvent('bufferOverflow', send);
+            addEvent('beforeunload', send, window);
+            addEvent('mouseout', out);
+            addEvent('mousemove', mouse);
+            addEvent('scroll', scroll);
 
             setTimeout(function () {
-                removeEvent('bufferOverflow', send, false);
-                removeEvent('beforeunload', send, false);
-                removeEvent('mouseout', out, false);
-                removeEvent('mousemove', mouse, false);
-                removeEvent('scroll', scroll, false);
+                removeEvent('bufferOverflow', send);
+                removeEvent('beforeunload', send, window);
+                removeEvent('mouseout', out);
+                removeEvent('mousemove', mouse);
+                removeEvent('scroll', scroll);
                 that.send();
             }, that.config.timeout);
 
-            function addEvent(event, fn) {
-                if(document.addEventListener) {
-                    document.addEventListener(event, fn, false)
+            function addEvent(event, fn, context) {
+                if(context===undefined) {
+                    context = document;
+                }
+                if(context.addEventListener) {
+                    context.addEventListener(event, fn, false)
                 } else {
-                    document.attachEvent("on"+event, fn);
+                    context.attachEvent("on"+event, fn);
                 }
             }
 
-            function removeEvent(event, fn) {
-                if(document.removeEventListener) {
-                    document.removeEventListener(event, fn, false)
+            function removeEvent(event, fn, context) {
+                if(context===undefined) {
+                    context = document;
+                }
+                if(context.removeEventListener) {
+                    context.removeEventListener(event, fn, false)
                 } else {
-                    document.detachEvent("on"+event, fn);
+                    context.detachEvent("on"+event, fn);
                 }
             }
         },
@@ -117,25 +123,15 @@ if (!Object.assign) {
             var url = this.config.url +
                 '&data=' + base64_encode(JSON.stringify(this.data));
 
-            // safari setting third party cookies by iframe
-            if(!this.sendCounter && navigator.userAgent.indexOf('Safari')!=-1 && navigator.userAgent.indexOf('Chrome')==-1) {
-                var iframe = document.createElement('iframe');
-                iframe.src = url+'&iframe=true';
-                iframe.style.display = "none";
-                document.body.appendChild(iframe);
-            } else {
-                var img = document.createElement('img');
-                img.src = url;
-                img.style.display = "none";
-                document.body.appendChild(img);
-            }
+            var el = document.createElement((this.config.iframe ? 'iframe' : 'img'));
+            el.src = url;
+            el.style.display = "none";
+            document.body.appendChild(el);
 
             this.data.scrollY = [];
             this.data.scrollMove = 0;
             this.data.mouseXY = [];
             this.data.mouseMove = 0;
-
-            this.sendCounter++;
 
             function base64_encode(data) {
                 var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
