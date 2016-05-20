@@ -31,10 +31,144 @@ if (!Object.assign) {
     });
 }
 (function (window) {
+    var utils = {
+        base64_encode: function(data) {
+            var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+            var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, enc = '';
+
+            do { // pack three octets into four hexets
+                o1 = data.charCodeAt(i++);
+                o2 = data.charCodeAt(i++);
+                o3 = data.charCodeAt(i++);
+
+                bits = o1 << 16 | o2 << 8 | o3;
+
+                h1 = bits >> 18 & 0x3f;
+                h2 = bits >> 12 & 0x3f;
+                h3 = bits >> 6 & 0x3f;
+                h4 = bits & 0x3f;
+
+                // use hexets to index into b64, and append result to encoded string
+                enc += b64.charAt(h1) + b64.charAt(h2) + b64.charAt(h3) + b64.charAt(h4);
+            } while (i < data.length);
+
+            switch (data.length % 3) {
+                case 1:
+                    enc = enc.slice(0, -2) + '==';
+                    break;
+                case 2:
+                    enc = enc.slice(0, -1) + '=';
+                    break;
+            }
+
+            return enc;
+        },
+        addEvent: function(event, fn, context) {
+            if(context===undefined) {
+                context = document;
+            }
+            if(context.addEventListener) {
+                context.addEventListener(event, fn, false)
+            } else {
+                context.attachEvent("on"+event, fn);
+            }
+        },
+        removeEvent: function(event, fn, context) {
+            if(context===undefined) {
+                context = document;
+            }
+            if(context.removeEventListener) {
+                context.removeEventListener(event, fn, false)
+            } else {
+                context.detachEvent("on"+event, fn);
+            }
+        }
+    };
+
+    var storage = function() {};
+
+    storage.prototype = {
+        data: {
+            scrollY: [],
+            scrollMove: 0,
+            mouseXY: [],
+            mouseMove: 0,
+            url: location.href
+        },
+        constructor: storage,
+        merge: function(obj) {
+            this.data = Object.assign(this.data, obj);
+        },
+        pushMouseData: function(x, y) {
+            if(this.data.mouseXY.length>0) {
+                var last = this.data.mouseXY[this.data.mouseXY.length-1];
+                this.data.mouseMove += Math.round(Math.sqrt(Math.pow(last.x - x, 2)+Math.pow(last.y - y, 2)));
+            }
+            this.data.mouseXY.push({x: x, y: y});
+        },
+        pushScrollData: function(y) {
+            if(this.data.scrollY.length>0) {
+                var last = this.data.scrollY[this.data.scrollY.length-1];
+                this.data.scrollMove += Math.max(last, y) - Math.min(last, y);
+            }
+            this.data.scrollY.push(y);
+        },
+        fetch: function() {
+            return this.data;
+        },
+        clear: function() {
+            this.data.scrollY = [];
+            this.data.scrollMove = 0;
+            this.data.mouseXY = [];
+            this.data.mouseMove = 0;
+        },
+        size: function() {
+            return this.data.scrollY.length + this.data.mouseXY.length;
+        }
+    };
+
+    var sender = function(options) {
+        this.config = Object.assign(this.config, options);
+    };
+
+    sender.prototype = {
+        config: {
+            iframe: true,
+            url: 'http://localhost/test?param=1', // url for send data
+            sendTimeout: 1000 // one sec
+        },
+        sending: false,
+        constructor: sender,
+        send: function(data) {
+            if(this.sending)
+                return false;
+
+            var that = this;
+
+            this.sending = true;
+            setTimeout(function(){
+                that.sending = false;
+            }, this.config.sendTimeout);
+
+            var url = this.config.url +
+                '&data=' + utils.base64_encode(JSON.stringify(data));
+
+            var el = document.createElement((this.config.iframe ? 'iframe' : 'img'));
+            el.src = url;
+            el.style.display = "none";
+            document.body.appendChild(el);
+
+            return true;
+        }
+    };
+
     window.marker = function (options) {
         var that = this;
 
-        this.config = Object.assign(this.config, options);
+        this.config = Object.assign(this.config, options.marker || {});
+
+        this.sender = new sender(options.sender || {});
+        this.storage = new storage();
         this.compress = compressor();
         this.initEvents();
 
@@ -42,11 +176,7 @@ if (!Object.assign) {
             var counter = 0;
             return function (x, y) {
                 if (!(counter % that.config.stepSkip)) {
-                    if(that.data.mouseXY.length>0) {
-                        var last = that.data.mouseXY[that.data.mouseXY.length-1];
-                        that.data.mouseMove += Math.round(Math.sqrt(Math.pow(last.x - x, 2)+Math.pow(last.y - y, 2)));
-                    }
-                    that.data.mouseXY.push({x: x, y: y});
+                    that.storage.pushMouseData(x, y);
                 }
                 counter++;
             }
@@ -56,17 +186,8 @@ if (!Object.assign) {
     window.marker.prototype = {
         config: {
             sizeForSend: 50, // data pack size
-            url: 'http://localhost/test?param=1', // url for send data
             stepSkip: 10, // save step for mouse move (for example every 10th will save)
-            timeout: 30 * 60 * 1000, // end listen time (in mins)
-            iframe: true
-        },
-        data: {
-            scrollY: [],
-            scrollMove: 0,
-            mouseXY: [],
-            mouseMove: 0,
-            url: location.href
+            listenTime: 30 * 60 * 1000 // end listen time (in mins)
         },
         constructor: marker,
         initEvents: function () {
@@ -82,91 +203,30 @@ if (!Object.assign) {
                     }
                 };
 
-            addEvent('bufferOverflow', send);
-            addEvent('beforeunload', send, window);
-            addEvent('mouseout', out);
-            addEvent('mousemove', mouse);
-            addEvent('scroll', scroll);
+            utils.addEvent('bufferOverflow', send);
+            utils.addEvent('beforeunload', send, window);
+            utils.addEvent('blur', send, window);
+            utils.addEvent('mouseout', out);
+            utils.addEvent('mousemove', mouse);
+            utils.addEvent('scroll', scroll);
 
             setTimeout(function () {
-                removeEvent('bufferOverflow', send);
-                removeEvent('beforeunload', send, window);
-                removeEvent('mouseout', out);
-                removeEvent('mousemove', mouse);
-                removeEvent('scroll', scroll);
+                utils.removeEvent('bufferOverflow', send);
+                utils.removeEvent('beforeunload', send, window);
+                utils.removeEvent('blur', send, window);
+                utils.removeEvent('mouseout', out);
+                utils.removeEvent('mousemove', mouse);
+                utils.removeEvent('scroll', scroll);
                 that.send();
-            }, that.config.timeout);
-
-            function addEvent(event, fn, context) {
-                if(context===undefined) {
-                    context = document;
-                }
-                if(context.addEventListener) {
-                    context.addEventListener(event, fn, false)
-                } else {
-                    context.attachEvent("on"+event, fn);
-                }
-            }
-
-            function removeEvent(event, fn, context) {
-                if(context===undefined) {
-                    context = document;
-                }
-                if(context.removeEventListener) {
-                    context.removeEventListener(event, fn, false)
-                } else {
-                    context.detachEvent("on"+event, fn);
-                }
-            }
+            }, that.config.listenTime);
         },
         send: function () {
-            var url = this.config.url +
-                '&data=' + base64_encode(JSON.stringify(this.data));
-
-            var el = document.createElement((this.config.iframe ? 'iframe' : 'img'));
-            el.src = url;
-            el.style.display = "none";
-            document.body.appendChild(el);
-
-            this.data.scrollY = [];
-            this.data.scrollMove = 0;
-            this.data.mouseXY = [];
-            this.data.mouseMove = 0;
-
-            function base64_encode(data) {
-                var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-                var o1, o2, o3, h1, h2, h3, h4, bits, i = 0, enc = '';
-
-                do { // pack three octets into four hexets
-                    o1 = data.charCodeAt(i++);
-                    o2 = data.charCodeAt(i++);
-                    o3 = data.charCodeAt(i++);
-
-                    bits = o1 << 16 | o2 << 8 | o3;
-
-                    h1 = bits >> 18 & 0x3f;
-                    h2 = bits >> 12 & 0x3f;
-                    h3 = bits >> 6 & 0x3f;
-                    h4 = bits & 0x3f;
-
-                    // use hexets to index into b64, and append result to encoded string
-                    enc += b64.charAt(h1) + b64.charAt(h2) + b64.charAt(h3) + b64.charAt(h4);
-                } while (i < data.length);
-
-                switch (data.length % 3) {
-                    case 1:
-                        enc = enc.slice(0, -2) + '==';
-                        break;
-                    case 2:
-                        enc = enc.slice(0, -1) + '=';
-                        break;
-                }
-
-                return enc;
-            }
+            var data = this.storage.fetch();
+            if(this.sender.send(data))
+                this.storage.clear();
         },
         checkBufferSize: function () {
-            var over = (this.data.scrollY.length + this.data.mouseXY.length) >= this.config.sizeForSend;
+            var over = this.storage.size() >= this.config.sizeForSend;
             if(over) {
                 var e = document.createEvent('Event');
                 e.initEvent('bufferOverflow', true, true);
@@ -188,18 +248,11 @@ if (!Object.assign) {
                 y = e.pageY;
             }
             this.compress(x, y);
-
             this.checkBufferSize();
         },
         handleScroll: function (e) {
             var y = Math.round(window.pageYOffset || document.documentElement.scrollTop);
-
-            if(this.data.scrollY.length>0) {
-                var last = this.data.scrollY[this.data.scrollY.length-1];
-                this.data.scrollMove += Math.max(last, y) - Math.min(last, y);
-            }
-            this.data.scrollY.push(y);
-
+            this.storage.pushScrollData(y);
             this.checkBufferSize();
         }
     };
