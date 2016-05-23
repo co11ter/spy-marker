@@ -85,45 +85,80 @@ if (!Object.assign) {
         }
     };
 
-    var storage = function() {};
+    var storage = function(options) {
+        this.config = Object.assign(this.config, options);
+
+        if(this.config.useLocalStorage && this._hasLocalStorage() && this._isEmptyLocalStorage()) {
+            this.data = this._data;
+        }
+    };
 
     storage.prototype = {
-        data: {
+        config: {
+            storkey: 'marker123',
+            useLocalStorage: true
+        },
+        _data: {
             scrollY: [],
             scrollMove: 0,
             mouseXY: [],
             mouseMove: 0,
             url: location.href
         },
+        get data() {
+            if(this.config.useLocalStorage && this._hasLocalStorage()) {
+                this._data = JSON.parse(window.localStorage.getItem(this.config.storkey));
+            }
+            return this._data;
+        },
+        set data(value) {
+            this._data = value;
+            if(this.config.useLocalStorage && this._hasLocalStorage()) {
+                window.localStorage.setItem(this.config.storkey, JSON.stringify(this._data));
+            }
+        },
         constructor: storage,
+        _hasLocalStorage: function() {
+            return typeof window.localStorage === 'object';
+        },
+        _isEmptyLocalStorage: function() {
+            return window.localStorage.getItem(this.config.storkey)===null;
+        },
         merge: function(obj) {
             this.data = Object.assign(this.data, obj);
         },
         pushMouseData: function(x, y) {
-            if(this.data.mouseXY.length>0) {
-                var last = this.data.mouseXY[this.data.mouseXY.length-1];
-                this.data.mouseMove += Math.round(Math.sqrt(Math.pow(last.x - x, 2)+Math.pow(last.y - y, 2)));
+            var data = this.data;
+            if(data.mouseXY.length>0) {
+                var last = data.mouseXY[data.mouseXY.length-1];
+                data.mouseMove += Math.round(Math.sqrt(Math.pow(last.x - x, 2)+Math.pow(last.y - y, 2)));
             }
-            this.data.mouseXY.push({x: x, y: y});
+            data.mouseXY.push({x: x, y: y});
+            this.data = data;
         },
         pushScrollData: function(y) {
-            if(this.data.scrollY.length>0) {
-                var last = this.data.scrollY[this.data.scrollY.length-1];
-                this.data.scrollMove += Math.max(last, y) - Math.min(last, y);
+            var data = this.data;
+            if(data.scrollY.length>0) {
+                var last = data.scrollY[data.scrollY.length-1];
+                data.scrollMove += Math.max(last, y) - Math.min(last, y);
             }
-            this.data.scrollY.push(y);
+            data.scrollY.push(y);
+            this.data = data;
         },
         fetch: function() {
             return this.data;
         },
         clear: function() {
-            this.data.scrollY = [];
-            this.data.scrollMove = 0;
-            this.data.mouseXY = [];
-            this.data.mouseMove = 0;
+            var data = this.data;
+            data.scrollY = [];
+            data.scrollMove = 0;
+            data.mouseXY = [];
+            data.mouseMove = 0;
+            this.data = data;
         },
         size: function() {
-            return this.data.scrollY.length + this.data.mouseXY.length;
+            var data = this.data;
+            return data.scrollY.length + data.mouseXY.length;
         }
     };
 
@@ -168,7 +203,7 @@ if (!Object.assign) {
         this.config = Object.assign(this.config, options.marker || {});
 
         this.sender = new sender(options.sender || {});
-        this.storage = new storage();
+        this.storage = new storage(options.storage || {});
         this.compress = compressor();
         this.initEvents();
 
