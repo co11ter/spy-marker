@@ -82,6 +82,50 @@ if (!Object.assign) {
             } else {
                 context.detachEvent("on"+event, fn);
             }
+        },
+        getCookie: function(name) {
+            var matches = document.cookie.match(new RegExp(
+                "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+            ));
+            return matches ? decodeURIComponent(matches[1]) : undefined;
+        },
+        setCookie: function(name, value, options) {
+            options = options || {};
+
+            var expires = options.expires;
+
+            if (typeof expires == "number" && expires) {
+                var d = new Date();
+                d.setTime(d.getTime() + expires * 1000);
+                expires = options.expires = d;
+            }
+            if (expires && expires.toUTCString) {
+                options.expires = expires.toUTCString();
+            }
+
+            value = encodeURIComponent(value);
+
+            var updatedCookie = name + "=" + value;
+
+            for (var propName in options) {
+                updatedCookie += "; " + propName;
+                var propValue = options[propName];
+                if (propValue !== true) {
+                    updatedCookie += "=" + propValue;
+                }
+            }
+
+            console.log(updatedCookie);
+
+            document.cookie = updatedCookie;
+        },
+        makeId: function(n) {
+            var id = "";
+            var letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            for(var i = 0; i < n; i++) {
+                id += letters.charAt(Math.floor(Math.random() * letters.length))
+            }
+            return id;
         }
     };
 
@@ -205,7 +249,8 @@ if (!Object.assign) {
         this.sender = new sender(options.sender || {});
         this.storage = new storage(options.storage || {});
         this.compress = compressor();
-        this.initEvents();
+        this._initMarker();
+        this._initEvents();
 
         function compressor() {
             var counter = 0;
@@ -222,10 +267,20 @@ if (!Object.assign) {
         config: {
             sizeForSend: 50, // data pack size
             stepSkip: 10, // save step for mouse move (for example every 10th will save)
-            listenTime: 30 * 60 * 1000 // end listen time (in mins)
+            name: 'marker123',
+            expire: 30 * 60  // end listen time (in seconds)
         },
         constructor: marker,
-        initEvents: function () {
+        _initMarker: function() {
+            if(this._isExpire()) {
+                utils.setCookie(this.config.name, utils.makeId(32), {expires: this.config.expire});
+            }
+            this.storage.merge({marker: utils.getCookie(this.config.name)});
+        },
+        _isExpire: function() {
+            return utils.getCookie(this.config.name)===undefined;
+        },
+        _initEvents: function () {
             var that = this,
                 send = that.send.bind(that),
                 mouse = that.handleMouseMove.bind(that),
@@ -253,7 +308,7 @@ if (!Object.assign) {
                 utils.removeEvent('mousemove', mouse);
                 utils.removeEvent('scroll', scroll);
                 that.send();
-            }, that.config.listenTime);
+            }, that.config.expire*1000); // in milliseconds
         },
         send: function () {
             var data = this.storage.fetch();
@@ -274,6 +329,9 @@ if (!Object.assign) {
             return over;
         },
         handleMouseMove: function (e) {
+            if(this._isExpire())
+                return;
+
             var x, y;
             if (document.all) {
                 x = event.x + document.body.scrollLeft;
@@ -286,6 +344,9 @@ if (!Object.assign) {
             this.checkBufferSize();
         },
         handleScroll: function (e) {
+            if(this._isExpire())
+                return;
+
             var y = Math.round(window.pageYOffset || document.documentElement.scrollTop);
             this.storage.pushScrollData(y);
             this.checkBufferSize();
