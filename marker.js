@@ -115,8 +115,6 @@ if (!Object.assign) {
                 }
             }
 
-            console.log(updatedCookie);
-
             document.cookie = updatedCookie;
         },
         makeId: function(n) {
@@ -212,27 +210,15 @@ if (!Object.assign) {
 
     sender.prototype = {
         config: {
-            iframe: true,
-            url: 'http://localhost/test?param=1', // url for send data
-            sendTimeout: 1000 // one sec
+            url: 'http://localhost/test?param=1' // url for send data
         },
         sending: false,
         constructor: sender,
         send: function(data) {
-            if(this.sending)
-                return false;
-
-            var that = this;
-
-            this.sending = true;
-            setTimeout(function(){
-                that.sending = false;
-            }, this.config.sendTimeout);
-
             var url = this.config.url +
                 '&data=' + utils.base64_encode(JSON.stringify(data));
 
-            var el = document.createElement((this.config.iframe ? 'iframe' : 'img'));
+            var el = document.createElement('img');
             el.src = url;
             el.style.display = "none";
             document.body.appendChild(el);
@@ -311,6 +297,9 @@ if (!Object.assign) {
             }, that.config.expire*1000); // in milliseconds
         },
         send: function () {
+            if(this._isExpire())
+                return;
+
             var data = this.storage.fetch();
             if(this.sender.send(data))
                 this.storage.clear();
