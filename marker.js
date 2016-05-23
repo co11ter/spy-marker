@@ -137,7 +137,7 @@ if (!Object.assign) {
 
     storage.prototype = {
         config: {
-            storkey: 'marker123',
+            key: 'marker123',
             useLocalStorage: true
         },
         _data: {
@@ -149,14 +149,14 @@ if (!Object.assign) {
         },
         get data() {
             if(this.config.useLocalStorage && this._hasLocalStorage()) {
-                this._data = JSON.parse(window.localStorage.getItem(this.config.storkey));
+                this._data = JSON.parse(window.localStorage.getItem(this.config.key));
             }
             return this._data;
         },
         set data(value) {
             this._data = value;
             if(this.config.useLocalStorage && this._hasLocalStorage()) {
-                window.localStorage.setItem(this.config.storkey, JSON.stringify(this._data));
+                window.localStorage.setItem(this.config.key, JSON.stringify(this._data));
             }
         },
         constructor: storage,
@@ -164,7 +164,7 @@ if (!Object.assign) {
             return typeof window.localStorage === 'object';
         },
         _isEmptyLocalStorage: function() {
-            return window.localStorage.getItem(this.config.storkey)===null;
+            return window.localStorage.getItem(this.config.key)===null;
         },
         merge: function(obj) {
             this.data = Object.assign(this.data, obj);
@@ -230,10 +230,23 @@ if (!Object.assign) {
     window.marker = function (options) {
         var that = this;
 
-        this.config = Object.assign(this.config, options.marker || {});
+        var senderConfig = {};
+        if(options.url!=undefined) {
+            senderConfig.url = options.url;
+            delete options.url;
+        }
+        this.sender = new sender(senderConfig);
 
-        this.sender = new sender(options.sender || {});
-        this.storage = new storage(options.storage || {});
+        var storageConfig = {};
+        storageConfig.key = options.name || this.config.name;
+        if(options.useLocalStorage!=undefined) {
+            storageConfig.useLocalStorage = options.useLocalStorage;
+            delete options.useLocalStorage;
+        }
+        this.storage = new storage(storageConfig);
+
+        this.config = Object.assign(this.config, options || {});
+
         this.compress = compressor();
         this._initMarker();
         this._initEvents();
